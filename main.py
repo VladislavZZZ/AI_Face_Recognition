@@ -35,26 +35,17 @@
 # pyplot.show()
 
 from matplotlib import pyplot
-from venv.ImageDetector import ImageDetector
-from venv.FaceRecognizer import FaceRecognizer
-# image_detector = ImageDetector()
-# res = image_detector.detect_faces(img_path='/Users/vladislav/Desktop/TrainSandBox/forTrain/111.jpg')
-# image_detector.show_detected_faces(res,'/Users/vladislav/Desktop/TrainSandBox/forTrain/111.jpg')
+from ImageDetector import ImageDetector
+from FaceRecognizer import FaceRecognizer
 
-person_rep={0:"Vlad",2:"Other"}
+# img=pyplot.imread('/Users/vladislav/Desktop/TrainSandBox/forTrain/111.jpg')
+# res = ImageDetector.detect_faces(img)
+# ImageDetector.show_detected_faces(res,img)
 
-face_rec = FaceRecognizer("/Users/vladislav/PycharmProjects/VGGFace/venv/data/vgg_face_weights.h5",
-                          "/Users/vladislav/PycharmProjects/VGGFace/venv/data/mmod_human_face_detector.dat")
+person_rep = {0: "Vlad", 2: "Other"}
 
-img=pyplot.imread("/Users/vladislav/Desktop/TrainSandBox/forTrain/images/photo_2020-04-07 19.59.57.jpeg")
+img = pyplot.imread("/Users/vladislav/Desktop/TrainSandBox/forTrain/images/photo_2020-04-07 19.59.57.jpeg")
 
-ans=face_rec.recognize("/Users/vladislav/PycharmProjects/VGGFace/venv/model/face_classifier_model.h5",img)
+ans = FaceRecognizer.recognize("/Users/vladislav/PycharmProjects/VGGFace/venv/model/face_classifier_model.h5", img)
 
-
-print(person_rep[ans[0]],ans[1]*100)
-
-
-
-
-
-
+print(person_rep[ans[0]], ans[1] * 100)

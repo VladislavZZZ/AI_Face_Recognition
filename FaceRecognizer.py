@@ -14,7 +14,7 @@ from tensorflow.keras.applications.imagenet_utils import preprocess_input
 import tensorflow.keras.backend as K
 
 
-def _init_train_model():
+def _init_train_model(weights_path):
     model = Sequential()
     model.add(ZeroPadding2D((1, 1), input_shape=(224, 224, 3)))
     model.add(Convolution2D(64, (3, 3), activation='relu'))
@@ -60,6 +60,7 @@ def _init_train_model():
 
     model.add(Flatten())
     model.add(Activation('softmax'))
+    model.load_weights(weights_path)
     return model
 
 
@@ -83,38 +84,39 @@ def _init_classifier_model(x_train):
 
 class FaceRecognizer:
 
+    __WEIGHTS_PATH="/Users/vladislav/PycharmProjects/VGGFace/venv/data/vgg_face_weights.h5"
+    __FACE_DETECTION_MODEL_PATH="/Users/vladislav/PycharmProjects/VGGFace/venv/data/mmod_human_face_detector.dat"
 
-    def __init__(self,weights_path,recognize_file_path):
-        model = _init_train_model()
-        model.load_weights(weights_path)
-        # Remove Last Softmax layer and get model upto last flatten layer with outputs 2622 units
-        self.vgg_face = Model(inputs=model.layers[0].input, outputs=model.layers[-2].output)
-        self.dnnFaceDetector = dlib.cnn_face_detection_model_v1(recognize_file_path)
-        self.person_rep = {}
+    _model = _init_train_model(__WEIGHTS_PATH)
+    __vgg_face=Model(inputs=_model.layers[0].input, outputs=_model.layers[-2].output)
+    __classifier_model=None
 
-    def train_model(self,
-                       train_dataset_path=None,
-                       test_dataset_path=None,
-                       new_model_directory=not None,
-                       epochs=100):
-        __train(train_dataset_path, test_dataset_path, new_model_directory, epochs)
+    @staticmethod
+    def train_model(train_dataset_path=None,
+                    test_dataset_path=None,
+                    new_model_directory=not None,
+                    epochs=100):
+        FaceRecognizer.__train(train_dataset_path, test_dataset_path, new_model_directory, epochs)
 
 
 
-    def pretrain_model(self,
-                       train_dataset_path=not None,
+    @staticmethod
+    def pretrain_model(train_dataset_path=not None,
                        test_dataset_path=None,
                        old_model_path=not None,
                        new_model_directory=not None,
                        epochs=100):
-        classifier_model = tf.keras.models.load_model(old_model_path)
-        __train(train_dataset_path,test_dataset_path,new_model_directory,epochs,classifier_model)
+        FaceRecognizer.__classifier_model = tf.keras.models.load_model(old_model_path)
+        FaceRecognizer.__train(train_dataset_path,test_dataset_path,new_model_directory,epochs
+                               ,FaceRecognizer.__classifier_model)
 
-    def recognize(self,model_path,
-                  img):
-        self.classifier_model = tf.keras.models.load_model(model_path)
+    @staticmethod
+    def recognize(model_path,img):
+        FaceRecognizer.__classifier_model = tf.keras.models.load_model(model_path)
+        dnn_face_detector = dlib.cnn_face_detection_model_v1(FaceRecognizer.__FACE_DETECTION_MODEL_PATH)
+
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        rects = self.dnnFaceDetector(gray, 1)
+        rects = dnn_face_detector(gray, 1)
         for (i, rect) in enumerate(rects):
             # Extract Each Face
             left = rect.rect.left()  # x1
@@ -134,34 +136,35 @@ class FaceRecognizer:
             crop_img = img_to_array(crop_img)
             crop_img = np.expand_dims(crop_img, axis=0)
             crop_img = preprocess_input(crop_img)
-            img_encode = self.vgg_face(crop_img)
+            img_encode = FaceRecognizer.__vgg_face(crop_img)
             # Make Predictions
             embed = K.eval(img_encode)
-            person = self.classifier_model.predict(embed)
+            person = FaceRecognizer.__classifier_model.predict(embed)
             return np.argmax(person), person[0][np.argmax(person)]
 
-    def __train(self,train_dataset_path=None,
-                       test_dataset_path=None,
-                       new_model_directory=not None,
-                       epochs=100,
+    @staticmethod
+    def __train(train_dataset_path=None,
+                test_dataset_path=None,
+                new_model_directory=not None,
+                epochs=100,
                 classifier_model=None):
         x_train = []
         y_train = []
         person_folders = os.listdir(train_dataset_path)
-        self.person_rep = dict()
+        person_rep = dict()
         for i, person in enumerate(person_folders):
             if person == '.DS_Store':
                 continue
             person_rep[i] = person
-            image_names = os.listdir(path + '/Images_crop/' + person + '/')
+            image_names = os.listdir(train_dataset_path+ person + '/')
             for image_name in image_names:
                 if image_name == '.DS_Store':
                     continue
-                img = load_img(path + '/Images_crop/' + person + '/' + image_name, target_size=(224, 224))
+                img = load_img(train_dataset_path + person + '/' + image_name, target_size=(224, 224))
                 img = img_to_array(img)
                 img = np.expand_dims(img, axis=0)
                 img = preprocess_input(img)
-                img_encode = self.vgg_face(img)
+                img_encode = FaceRecognizer.__vgg_face(img)
                 x_train.append(np.squeeze(K.eval(img_encode)).tolist())
                 y_train.append(i)
 
@@ -174,19 +177,19 @@ class FaceRecognizer:
         if test_dataset_path is not None:
             x_test = []
             y_test = []
-            person_folders = os.listdir(path + '/Test_Images_crop/')
+            person_folders = os.listdir(test_dataset_path)
             for i, person in enumerate(person_folders):
                 if person == '.DS_Store':
                     continue
-                image_names = os.listdir(path + '/Test_Images_crop/' + person + '/')
+                image_names = os.listdir(test_dataset_path + person + '/')
                 for image_name in image_names:
                     if image_name == '.DS_Store':
                         continue
-                    img = load_img(path + '/Test_Images_crop/' + person + '/' + image_name, target_size=(224, 224))
+                    img = load_img(test_dataset_path + person + '/' + image_name, target_size=(224, 224))
                     img = img_to_array(img)
                     img = np.expand_dims(img, axis=0)
                     img = preprocess_input(img)
-                    img_encode = vgg_face(img)
+                    img_encode = FaceRecognizer.__vgg_face(img)
                     x_test.append(np.squeeze(K.eval(img_encode)).tolist())
                     y_test.append(i)
 
@@ -196,4 +199,4 @@ class FaceRecognizer:
         else:
             classifier_model.fit(x_train, y_train, epochs=epochs)
 
-        tf.keras.models.save_model(self.classifier_model, new_model_directory)
+        tf.keras.models.save_model(classifier_model, new_model_directory)
